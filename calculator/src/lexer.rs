@@ -1,5 +1,6 @@
 use crate::token::Token;
 /// 字句解析機
+#[derive(Debug)]
 pub struct Lexer {
     /// 入力文字列
     input: Vec<char>,
@@ -15,8 +16,8 @@ impl Lexer {
 
     /// # Examples
     /// ```
-    /// # use rs_ruby::lexer::*;
-    /// # use rs_ruby::token::*;
+    /// # use calculator::lexer::*;
+    /// # use calculator::token::*;
     /// let mut lexer = Lexer::new("1 * (2 + 1)".into());
     /// assert_eq!(lexer.token(), Some(Token::Num(1_f64)));
     /// assert_eq!(lexer.token(), Some(Token::Asterisk));
@@ -100,26 +101,13 @@ mod tests {
     #[test]
     /// 四則演算の字句解析
     fn test_lexer_operator() {
-        let mut tables: HashMap<String, Token> = HashMap::new();
-        tables.insert("+".into(), Token::Plus);
-        tables.insert("-".into(), Token::Minus);
-        tables.insert("*".into(), Token::Asterisk);
-        tables.insert("/".into(), Token::Slash);
-        tables.insert("=".into(), Token::Equal);
+        let mut tables = HashMap::new();
+        tables.insert("+", Token::Plus);
+        tables.insert("-", Token::Minus);
+        tables.insert("*", Token::Asterisk);
+        tables.insert("/", Token::Slash);
         for (key, val) in tables {
-            let mut lexer = Lexer::new(key);
-            assert_eq!(lexer.token(), Some(val));
-            assert_eq!(lexer.token(), None);
-        }
-    }
-
-    #[test]
-    /// キーワードの字句解析
-    fn test_lexer_keyword() {
-        let mut tables: HashMap<String, Token> = HashMap::new();
-        tables.insert("def".into(), Token::Def);
-        for (key, val) in tables {
-            let mut lexer = Lexer::new(key);
+            let mut lexer = Lexer::new(key.into());
             assert_eq!(lexer.token(), Some(val));
             assert_eq!(lexer.token(), None);
         }
@@ -139,10 +127,10 @@ mod tests {
     /// 1桁以上の整数の字句解析
     fn test_lexer_some_digit_integer() {
         let mut tables = HashMap::new();
-        tables.insert("10".into(), Token::Num(10_f64));
-        tables.insert("100".into(), Token::Num(100_f64));
+        tables.insert("10", Token::Num(10_f64));
+        tables.insert("100", Token::Num(100_f64));
         for (input, expect) in tables {
-            let mut lexer = Lexer::new(input);
+            let mut lexer = Lexer::new(input.into());
             assert_eq!(lexer.token(), Some(expect));
             assert_eq!(lexer.token(), None);
         }
@@ -152,11 +140,11 @@ mod tests {
     /// 浮動小数点の字句解析
     fn test_lexer_some_digit_float() {
         let mut tables = HashMap::new();
-        tables.insert("1.0".into(), Token::Num(1.0));
-        tables.insert("1.1".into(), Token::Num(1.1));
-        tables.insert("10.1".into(), Token::Num(10.1));
+        tables.insert("1.0", Token::Num(1.0));
+        tables.insert("1.1", Token::Num(1.1));
+        tables.insert("10.1", Token::Num(10.1));
         for (input, expect) in tables {
-            let mut lexer = Lexer::new(input);
+            let mut lexer = Lexer::new(input.into());
             assert_eq!(lexer.token(), Some(expect));
             assert_eq!(lexer.token(), None);
         }

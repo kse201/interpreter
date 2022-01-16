@@ -45,6 +45,14 @@ impl Token {
         }
     }
 
+    pub fn precedence(&self) -> Precedence {
+        match self {
+            Token::Plus | Token::Minus => Precedence::SUM,
+            Token::Asterisk | Token::Slash => Precedence::PRODUCT,
+            _ => Precedence::LOWEST,
+        }
+    }
+
     /// キーワードに対応する字句を返す
     ///
     /// # Examples
@@ -59,4 +67,17 @@ impl Token {
             .find(|token| token.keyword() == s)
             .and_then(|s| Some(*s))
     }
+}
+
+/// 優先順位
+#[derive(Debug, PartialEq, PartialOrd)]
+pub enum Precedence {
+    LOWEST,
+    /// '+', '-'
+    SUM,
+    /// '*', '/'
+    PRODUCT,
+
+    /// 前置詞
+    PREFIX,
 }

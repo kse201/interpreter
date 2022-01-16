@@ -1,4 +1,7 @@
-use crate::{lexer::Lexer, token::Token};
+use crate::{
+    lexer::Lexer,
+    token::{Precedence, Token},
+};
 /// 式
 #[derive(Debug)]
 pub enum Expr {
@@ -58,13 +61,8 @@ impl Parser {
     ///  let mut parser = Parser::new(lexer);
     ///  assert_eq!(format!("{:?}", parser.parse()), r#"Some(InfixExpr { operator: Plus, left: Num(1.0), right: Num(1.0) })"#);
     /// ```
-    pub fn parse(&mut self) -> Option<Expr> {
-        let mut left = self.parse_prefix()?;
-        while self.peek.is_some() {
-            self.next();
-            left = self.parse_infix(left)?;
-        }
-        return Some(*left);
+    pub fn parse(&mut self) -> Option<Box<Expr>> {
+        self.parse_expression(Precedence::LOWEST)
     }
 
     fn parse_infix(&mut self, left: Box<Expr>) -> Option<Box<Expr>> {
@@ -72,7 +70,7 @@ impl Parser {
             Token::Plus | Token::Minus | Token::Asterisk | Token::Slash => {
                 let token = self.current?;
                 self.next();
-                let right = self.parse_expression()?;
+                let right = self.parse_expression(Precedence::LOWEST)?;
                 Some(Box::new(Expr::InfixExpr {
                     operator: token,
                     left,
@@ -89,19 +87,40 @@ impl Parser {
             Token::Num(n) => Some(Box::new(Expr::Num(n))),
             Token::Minus => {
                 self.next();
-                let right = self.parse_expression()?;
+                let right = self.parse_expression(Precedence::PREFIX)?;
                 Some(Box::new(Expr::PrefixExpr {
                     operator: Token::Minus,
                     right: Box::new(*right),
                 }))
             }
-            Token::LeftParen => unimplemented!("unimplemented Left paren"),
+            Token::LeftParen => {
+                self.next();
+                let expresion = self.parse_expression(Precedence::LOWEST);
+                if Some(Token::RightParen) == self.peek {
+                    self.next();
+                    expresion
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }
 
-    fn parse_expression(&mut self) -> Option<Box<Expr>> {
-        self.parse_prefix()
+    fn peek_predecence(&self) -> Precedence {
+        match self.peek {
+            Some(token) => token.precedence(),
+            None => Precedence::LOWEST,
+        }
+    }
+
+    fn parse_expression(&mut self, precedence: Precedence) -> Option<Box<Expr>> {
+        let mut left = self.parse_prefix()?;
+        while self.peek.is_some() && precedence < self.peek_predecence() {
+            self.next();
+            left = self.parse_infix(left)?;
+        }
+        return Some(left);
     }
 
     fn next(&mut self) {
@@ -170,6 +189,19 @@ mod tests {
         tables.insert("1-1", 0.0);
         tables.insert("2*1", 2.0);
         tables.insert("4.1*2", 8.2);
+
+        for (input, expect) in tables {
+            let lexer = Lexer::new(input.into());
+            let mut parser = Parser::new(lexer);
+            assert_eq!(eval(&parser.parse().unwrap()), expect);
+        }
+    }
+
+    #[test]
+    fn test_eval_paren() {
+        let mut tables = HashMap::new();
+        tables.insert("1+2*3", 7.0);
+        tables.insert("(1+2)*3", 9.0);
 
         for (input, expect) in tables {
             let lexer = Lexer::new(input.into());

@@ -1,0 +1,56 @@
+[tasks.ci]
+dependencies = [
+    "fmt",
+    "check",
+    "test",
+    "test-doc",
+    "doc",
+    "build"
+]
+
+[tasks.fmt]
+command = "cargo"
+args = [
+  "fmt",
+  "--all",
+  "--",
+  "--check",
+]
+
+[tasks.check]
+command = "cargo"
+args = [
+  "check",
+  "--all-targets",
+]
+
+[tasks.doc]
+command = "cargo"
+args = ["doc"]
+
+[tasks.view_doc]
+install_crate = { crate_name = "https",  binary = "https", test_arg = "--version" }
+command = "http"
+args = ["target/doc"]
+dependencies = ["doc"]
+
+[tasks.live_view_doc]
+command = "cargo"
+args = ["watch", "-x", "make view_doc"]
+
+[tasks.watch]
+command = "cargo"
+args = ["watch", "-x", "test"]
+
+[tasks.test]
+command = "cargo"
+args = [
+  "test",
+  "--lib",
+  "--tests",
+  "--examples",
+]
+
+[tasks.test-doc]
+command = "cargo"
+args = ["test", "--doc"]

@@ -3,6 +3,9 @@ use super::token::Token;
 
 #[derive(Debug, Clone)]
 pub enum Cell {
+    /// nil
+    NIL,
+
     /// Number
     /// 1.0 ...
     NUMBER { val: f64 },
@@ -12,10 +15,7 @@ pub enum Cell {
     SYMBOL { name: String },
 
     /// Cons
-    CONS {
-        car: Option<Box<Cell>>,
-        cdr: Option<Box<Cell>>,
-    },
+    CONS { car: Box<Cell>, cdr: Box<Cell> },
 
     /// 組み込み関数
     SUBR,
@@ -38,13 +38,21 @@ impl fmt::Display for Cell {
             Self::SYMBOL { name } => {
                 write!(f, "{}", name)
             }
-            Self::CONS { .. } => write!(f, "(").and(self.fmt_list(f)),
+            Self::CONS { .. } => {
+                f.write_str("(")?;
+                self.fmt_list(f)
+            }
+
             _ => unimplemented!(),
         }
     }
 }
 
 impl Cell {
+    pub fn nil() -> Box<Cell> {
+        Box::new(Cell::NIL)
+    }
+
     pub fn number(val: f64) -> Box<Cell> {
         Box::new(Self::NUMBER { val })
     }
@@ -53,22 +61,22 @@ impl Cell {
         Box::new(Self::SYMBOL { name })
     }
 
-    pub fn cons(car: Option<Box<Cell>>, cdr: Option<Box<Cell>>) -> Box<Cell> {
+    pub fn cons(car: Box<Cell>, cdr: Box<Cell>) -> Box<Cell> {
         Box::new(Self::CONS { car, cdr })
     }
 
     fn fmt_list(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::CONS { car, cdr } => {
-                if car.is_none() {
+                if car.is_nil() {
                     return write!(f, ")");
                 }
-                if cdr.is_some() && !is_list(cdr.clone()) {
+                if cdr.is_some() && !cdr.is_list() {
                     write!(f, "{} . {})", "car", "cdr")
                 } else {
-                    let r = write!(f, "{}", car.as_ref().unwrap());
-                    if !cdr.is_none() {
-                        r.and(write!(f, " ").and(cdr.as_ref().unwrap().fmt_list(f)))
+                    let r = write!(f, "{}", car.as_ref());
+                    if !cdr.is_nil() {
+                        r.and(write!(f, " ").and(cdr.as_ref().fmt_list(f)))
                     } else {
                         r.and(write!(f, ")"))
                     }
@@ -78,22 +86,22 @@ impl Cell {
         }
     }
 
-    pub fn car(&self) -> Option<Box<Cell>> {
+    pub fn car(&self) -> Box<Cell> {
         match self {
             Cell::CONS { car, .. } => car.clone(),
-            _ => None,
+            _ => Cell::nil(),
         }
     }
 
-    pub fn cdr(&self) -> Option<Box<Cell>> {
+    pub fn cdr(&self) -> Box<Cell> {
         match self {
             Cell::CONS { cdr, .. } => cdr.clone(),
-            _ => None,
+            _ => Cell::nil(),
         }
     }
 
-    pub fn cadr(&self) -> Option<Box<Cell>> {
-        self.cdr().and_then(|cdr| cdr.car())
+    pub fn cadr(&self) -> Box<Cell> {
+        self.cdr().car()
     }
 
     pub fn name(&self) -> Option<String> {
@@ -101,6 +109,84 @@ impl Cell {
             Self::SYMBOL { name } => Some(name.to_string()),
             _ => None,
         }
+    }
+
+    fn is_nil(&self) -> bool {
+        match self {
+            Cell::NIL => true,
+            _ => false,
+        }
+    }
+
+    fn is_some(&self) -> bool {
+        !self.is_nil()
+    }
+
+    fn is_symbol(&self) -> bool {
+        match self {
+            Cell::SYMBOL { .. } => true,
+            _ => false,
+        }
+    }
+
+    fn is_number(&self) -> bool {
+        match self {
+            Cell::NUMBER { .. } => true,
+            _ => false,
+        }
+    }
+
+    fn is_list(&self) -> bool {
+        match self {
+            Cell::CONS { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub fn iter<'a>(&'a self) -> std::vec::IntoIter<&'a Cell> {
+        let v = match self {
+            Cell::CONS { car, cdr } => {
+                let mut v = vec![];
+                if car.is_some() {
+                    v.push(car.as_ref());
+                }
+                if cdr.is_some() {
+                    v.push(cdr.as_ref());
+                }
+                v
+            }
+            _ => Vec::new(),
+        };
+        v.into_iter()
+    }
+    pub fn iter_mut<'a>(&'a mut self) -> std::vec::IntoIter<&'a mut Cell> {
+        let v = match self {
+            Cell::CONS { car, cdr } => {
+                let mut v = vec![];
+                if car.is_some() {
+                    v.push(car.as_mut());
+                }
+                if cdr.is_some() {
+                    v.push(cdr.as_mut());
+                }
+                v
+            }
+            _ => Vec::new(),
+        };
+        v.into_iter()
+    }
+}
+
+impl IntoIterator for Cell {
+    type Item = Cell;
+    type IntoIter = std::vec::IntoIter<Cell>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let v = match self {
+            Cell::CONS { car, cdr } => vec![*car, *cdr],
+            _ => Vec::new(),
+        };
+        v.into_iter()
     }
 }
 
@@ -128,36 +214,38 @@ impl Parser {
         self.peek = self.lexer.token();
     }
 
-    pub fn parse(&mut self) -> Option<Box<Sexp>> {
-        match self.current()? {
-            Token::NUMBER { val } => Some(Cell::number(*val)),
-            Token::SYMBOL { buf } => Some(Cell::symbol(buf.to_string())),
-            Token::QUOTE => {
+    pub fn parse(&mut self) -> Box<Sexp> {
+        match self.current() {
+            Some(Token::NUMBER { val }) => Cell::number(*val),
+            Some(Token::SYMBOL { buf }) => Cell::symbol(buf.to_string()),
+            Some(Token::QUOTE) => {
                 self.next();
-                Some(Cell::cons(
-                    Some(Cell::symbol("quote".to_string())),
-                    Some(Cell::cons(self.parse(), None)),
-                ))
+                Cell::cons(
+                    Cell::symbol("quote".to_string()),
+                    Cell::cons(self.parse(), Cell::nil()),
+                )
             }
-            Token::LPAREN => self.parse_list(),
-            Token::RPAREN => panic!("parse error"),
+            Some(Token::LPAREN) => self.parse_list(),
+            Some(Token::RPAREN) => panic!("parse error"),
+            None => Cell::nil(),
             _ => unimplemented!(),
         }
     }
 
-    fn parse_list(&mut self) -> Option<Box<Sexp>> {
+    fn parse_list(&mut self) -> Box<Sexp> {
         self.next();
         // read list
-        match self.current()? {
-            Token::RPAREN => None,
-            Token::DOT => {
+        match self.current() {
+            Some(Token::RPAREN) => Cell::nil(),
+            Some(Token::DOT) => {
                 todo!()
             }
-            _ => {
+            Some(_) => {
                 let car = self.parse();
                 let cdr = self.parse_list();
-                Some(Cell::cons(car, cdr))
+                Cell::cons(car, cdr)
             }
+            None => Cell::nil(),
         }
     }
 
@@ -178,11 +266,9 @@ pub fn eval(sexp: &Sexp) -> Cell {
             // }
         }
         Cell::CONS { .. } => {
-            if is_symbol(sexp.car())
-                && (Some("quote".to_string()) == sexp.car().and_then(|car| car.name()))
-            {
-                return *sexp.cadr().unwrap();
-            } else if is_number(sexp.car()) {
+            if sexp.car().is_symbol() && (Some("quote".to_string()) == sexp.car().name()) {
+                return *sexp.cadr();
+            } else if sexp.car().is_number() {
                 panic!("Arg Error")
             } else {
                 unimplemented!()
@@ -199,36 +285,6 @@ pub fn eval(sexp: &Sexp) -> Cell {
 // }
 // }
 
-fn is_symbol(p: Option<Box<Cell>>) -> bool {
-    match p {
-        None => false,
-        Some(cell) => match cell.as_ref() {
-            Cell::SYMBOL { .. } => true,
-            _ => false,
-        },
-    }
-}
-
-fn is_number(p: Option<Box<Cell>>) -> bool {
-    match p {
-        Some(cell) => match cell.as_ref() {
-            Cell::NUMBER { .. } => true,
-            _ => false,
-        },
-        None => false,
-    }
-}
-
-fn is_list(p: Option<Box<Cell>>) -> bool {
-    match p {
-        Some(cell) => match cell.as_ref() {
-            Cell::CONS { .. } => true,
-            _ => false,
-        },
-        None => false,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -236,14 +292,14 @@ mod tests {
     #[test]
     fn test_parser() {
         let lexer = Lexer::new("(+ (+ 1 2) 3)".chars().collect());
-        let tree = Parser::new(lexer).parse().unwrap();
+        let tree = Parser::new(lexer).parse();
         assert_eq!("(+ (+ 1 2) 3)", format!("{}", tree),);
     }
 
     #[test]
     fn test_parser_quote() {
         let lexer = Lexer::new("'1".chars().collect());
-        let tree = Parser::new(lexer).parse().unwrap();
+        let tree = Parser::new(lexer).parse();
         assert_eq!("(quote 1)", format!("{}", tree),);
     }
 }

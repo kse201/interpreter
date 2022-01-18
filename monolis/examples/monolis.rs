@@ -22,8 +22,6 @@ fn main() {
 
         let expr = parser.parse();
 
-        if let Some(expr) = expr {
-            println!("{}", eval(&expr));
-        }
+        println!("{}", eval(&expr));
     }
 }

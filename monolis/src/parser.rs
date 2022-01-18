@@ -28,7 +28,6 @@ pub enum Cell {
 }
 
 use std::fmt;
-
 impl fmt::Display for Cell {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -46,13 +45,25 @@ impl fmt::Display for Cell {
 }
 
 impl Cell {
+    pub fn number(val: f64) -> Box<Cell> {
+        Box::new(Self::NUMBER { val })
+    }
+
+    pub fn symbol(name: String) -> Box<Cell> {
+        Box::new(Self::SYMBOL { name })
+    }
+
+    pub fn cons(car: Option<Box<Cell>>, cdr: Option<Box<Cell>>) -> Box<Cell> {
+        Box::new(Self::CONS { car, cdr })
+    }
+
     fn fmt_list(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::CONS { car, cdr } => {
                 if car.is_none() {
                     return write!(f, ")");
                 }
-                if cdr.is_some() && !&cdr.as_ref().unwrap().is_list() {
+                if cdr.is_some() && !is_list(cdr.clone()) {
                     write!(f, "{} . {})", "car", "cdr")
                 } else {
                     let r = write!(f, "{}", car.as_ref().unwrap());
@@ -64,12 +75,6 @@ impl Cell {
                 }
             }
             _ => todo!(),
-        }
-    }
-    pub fn is_list(&self) -> bool {
-        match self {
-            Self::CONS { .. } => true,
-            _ => false,
         }
     }
 
@@ -125,21 +130,14 @@ impl Parser {
 
     pub fn parse(&mut self) -> Option<Box<Sexp>> {
         match self.current()? {
-            Token::NUMBER { val } => Some(Box::new(Cell::NUMBER { val: *val })),
-            Token::SYMBOL { buf } => Some(Box::new(Cell::SYMBOL {
-                name: buf.to_string(),
-            })),
+            Token::NUMBER { val } => Some(Cell::number(*val)),
+            Token::SYMBOL { buf } => Some(Cell::symbol(buf.to_string())),
             Token::QUOTE => {
                 self.next();
-                Some(Box::new(Cell::CONS {
-                    car: Some(Box::new(Cell::SYMBOL {
-                        name: "quote".to_string(),
-                    })),
-                    cdr: Some(Box::new(Cell::CONS {
-                        car: self.parse(),
-                        cdr: None,
-                    })),
-                }))
+                Some(Cell::cons(
+                    Some(Cell::symbol("quote".to_string())),
+                    Some(Cell::cons(self.parse(), None)),
+                ))
             }
             Token::LPAREN => self.parse_list(),
             Token::RPAREN => panic!("parse error"),
@@ -158,7 +156,7 @@ impl Parser {
             _ => {
                 let car = self.parse();
                 let cdr = self.parse_list();
-                Some(Box::new(Sexp::CONS { car, cdr }))
+                Some(Cell::cons(car, cdr))
             }
         }
     }
@@ -180,11 +178,11 @@ pub fn eval(sexp: &Sexp) -> Cell {
             // }
         }
         Cell::CONS { .. } => {
-            if symbolp(sexp.car())
+            if is_symbol(sexp.car())
                 && (Some("quote".to_string()) == sexp.car().and_then(|car| car.name()))
             {
                 return *sexp.cadr().unwrap();
-            } else if numberp(sexp.car()) {
+            } else if is_number(sexp.car()) {
                 panic!("Arg Error")
             } else {
                 unimplemented!()
@@ -201,7 +199,7 @@ pub fn eval(sexp: &Sexp) -> Cell {
 // }
 // }
 
-fn symbolp(p: Option<Box<Cell>>) -> bool {
+fn is_symbol(p: Option<Box<Cell>>) -> bool {
     match p {
         None => false,
         Some(cell) => match cell.as_ref() {
@@ -211,13 +209,23 @@ fn symbolp(p: Option<Box<Cell>>) -> bool {
     }
 }
 
-fn numberp(p: Option<Box<Cell>>) -> bool {
+fn is_number(p: Option<Box<Cell>>) -> bool {
     match p {
-        None => false,
         Some(cell) => match cell.as_ref() {
             Cell::NUMBER { .. } => true,
             _ => false,
         },
+        None => false,
+    }
+}
+
+fn is_list(p: Option<Box<Cell>>) -> bool {
+    match p {
+        Some(cell) => match cell.as_ref() {
+            Cell::CONS { .. } => true,
+            _ => false,
+        },
+        None => false,
     }
 }
 

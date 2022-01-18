@@ -1,12 +1,6 @@
 use std::slice::Iter;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Flag {
-    GO,
-    BACK,
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     /// '('
     LPAREN,
@@ -18,17 +12,14 @@ pub enum Token {
     DOT,
 
     NUMBER {
-        backtrack: Flag,
         val: f64,
     },
 
     SYMBOL {
-        backtrack: Flag,
         buf: String,
     },
 
     OTHER {
-        backtrack: Flag,
         buf: String,
     },
 }
@@ -37,21 +28,12 @@ impl Token {
     pub fn new(s: Vec<char>) -> Self {
         let buf = s.iter().collect::<String>();
         match buf.parse::<f64>() {
-            Ok(n) => Self::NUMBER {
-                backtrack: Flag::GO,
-                val: n,
-            },
+            Ok(n) => Self::NUMBER { val: n },
             Err(_) => {
                 if is_symboltoken(s) {
-                    Self::SYMBOL {
-                        backtrack: Flag::GO,
-                        buf,
-                    }
+                    Self::SYMBOL { buf }
                 } else {
-                    Self::OTHER {
-                        backtrack: Flag::GO,
-                        buf,
-                    }
+                    Self::OTHER { buf }
                 }
             }
         }
@@ -107,35 +89,11 @@ mod tests {
     #[test]
     fn test_token_new_with_num() {
         let mut tables = HashMap::new();
-        tables.insert(
-            "1",
-            Token::NUMBER {
-                val: 1.0,
-                backtrack: Flag::GO,
-            },
-        );
-        tables.insert(
-            "10",
-            Token::NUMBER {
-                val: 10.0,
-                backtrack: Flag::GO,
-            },
-        );
-        tables.insert(
-            "2",
-            Token::NUMBER {
-                val: 2.0,
-                backtrack: Flag::GO,
-            },
-        );
+        tables.insert("1", Token::NUMBER { val: 1.0 });
+        tables.insert("10", Token::NUMBER { val: 10.0 });
+        tables.insert("2", Token::NUMBER { val: 2.0 });
 
-        tables.insert(
-            "-1",
-            Token::NUMBER {
-                val: -1.0,
-                backtrack: Flag::GO,
-            },
-        );
+        tables.insert("-1", Token::NUMBER { val: -1.0 });
         for (key, val) in tables {
             let result = Token::new(key.chars().collect());
             assert_eq!(result, val, "case: {} failed", key);
@@ -145,37 +103,13 @@ mod tests {
     #[test]
     fn test_token_new_with_symbol() {
         let mut tables = HashMap::new();
-        tables.insert(
-            "a",
-            Token::SYMBOL {
-                buf: "a".into(),
-                backtrack: Flag::GO,
-            },
-        );
+        tables.insert("a", Token::SYMBOL { buf: "a".into() });
 
-        tables.insert(
-            "a-1",
-            Token::SYMBOL {
-                buf: "a-1".into(),
-                backtrack: Flag::GO,
-            },
-        );
+        tables.insert("a-1", Token::SYMBOL { buf: "a-1".into() });
 
-        tables.insert(
-            "a!",
-            Token::SYMBOL {
-                buf: "a!".into(),
-                backtrack: Flag::GO,
-            },
-        );
+        tables.insert("a!", Token::SYMBOL { buf: "a!".into() });
 
-        tables.insert(
-            "!a",
-            Token::SYMBOL {
-                buf: "!a".into(),
-                backtrack: Flag::GO,
-            },
-        );
+        tables.insert("!a", Token::SYMBOL { buf: "!a".into() });
         for (key, val) in tables {
             let result = Token::new(key.chars().collect());
             assert_eq!(result, val, "case: {} failed", key);
@@ -188,6 +122,17 @@ mod tests {
         tables.insert("a", true);
         tables.insert("a-1", true);
         tables.insert("a-b", true);
+        for (key, val) in tables {
+            let result = is_symboltoken(key.chars().collect());
+            assert_eq!(result, val, "case: {} failed", key);
+        }
+    }
+
+    #[test]
+    fn test_is_other_token() {
+        let mut tables = HashMap::new();
+        tables.insert("\"a\"", false);
+        tables.insert("\"Hello, World\"", false);
         for (key, val) in tables {
             let result = is_symboltoken(key.chars().collect());
             assert_eq!(result, val, "case: {} failed", key);

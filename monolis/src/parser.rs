@@ -1,5 +1,4 @@
-use super::lexer::Lexer;
-use super::token::Token;
+use super::token::{Token, Tokenize};
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -30,7 +29,7 @@ pub enum Cell {
 }
 
 /// S式
-type Sexp = Box<Cell>;
+pub type Sexp = Box<Cell>;
 
 impl fmt::Display for Cell {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -67,6 +66,10 @@ impl Cell {
 
     pub fn cons(car: Sexp, cdr: Sexp) -> Sexp {
         Box::new(Self::CONS { car, cdr })
+    }
+
+    pub fn subr(func: fn(Sexp) -> Sexp) -> Sexp {
+        Box::new(Self::SUBR { subr: func })
     }
 
     fn fmt_list(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -112,6 +115,24 @@ impl Cell {
         self.car().car()
     }
 
+    pub fn set_car(&mut self, cell: Sexp) {
+        match self {
+            Cell::CONS { car, .. } => {
+                *car = cell;
+            }
+            _ => {}
+        }
+    }
+
+    pub fn set_cdr(&mut self, cell: Sexp) {
+        match self {
+            Cell::CONS { cdr, .. } => {
+                *cdr = cell;
+            }
+            _ => {}
+        }
+    }
+
     pub fn name(&self) -> Option<String> {
         match self {
             Self::SYMBOL { name } => Some(name.to_string()),
@@ -119,14 +140,14 @@ impl Cell {
         }
     }
 
-    fn is_nil(&self) -> bool {
+    pub fn is_nil(&self) -> bool {
         match self {
             Cell::NIL => true,
             _ => false,
         }
     }
 
-    fn is_some(&self) -> bool {
+    pub fn is_some(&self) -> bool {
         !self.is_nil()
     }
 
@@ -134,42 +155,42 @@ impl Cell {
         self.is_number() || self.is_symbol()
     }
 
-    fn is_symbol(&self) -> bool {
+    pub fn is_symbol(&self) -> bool {
         match self {
             Cell::SYMBOL { .. } => true,
             _ => false,
         }
     }
 
-    fn is_number(&self) -> bool {
+    pub fn is_number(&self) -> bool {
         match self {
             Cell::NUMBER { .. } => true,
             _ => false,
         }
     }
 
-    fn is_list(&self) -> bool {
+    pub fn is_list(&self) -> bool {
         match self {
             Cell::CONS { .. } => true,
             _ => false,
         }
     }
 
-    fn is_subr(&self) -> bool {
+    pub fn is_subr(&self) -> bool {
         match self {
             Cell::SUBR { .. } => true,
             _ => false,
         }
     }
 
-    fn is_fsubr(&self) -> bool {
+    pub fn is_fsubr(&self) -> bool {
         match self {
             Cell::FSUBR { .. } => true,
             _ => false,
         }
     }
 
-    fn is_function(&self) -> bool {
+    pub fn is_function(&self) -> bool {
         match self {
             Cell::FUNC { .. } => true,
             _ => false,
@@ -226,13 +247,13 @@ impl IntoIterator for Cell {
     }
 }
 
-pub struct Parser {
-    lexer: Lexer,
+pub struct Parser<T: Tokenize> {
+    lexer: T,
     current: Option<Token>,
 }
 
-impl Parser {
-    pub fn new(mut lexer: Lexer) -> Self {
+impl<T: Tokenize> Parser<T> {
+    pub fn new(mut lexer: T) -> Self {
         let current = lexer.token();
         Parser { lexer, current }
     }
@@ -286,147 +307,62 @@ impl Parser {
     }
 }
 
-pub fn eval(sexp: Sexp) -> Sexp {
-    match sexp.as_ref() {
-        Cell::NUMBER { .. } => sexp.clone(),
-        Cell::SYMBOL { name } => {
-            todo!()
-            // let cell = find_sym(name);
-            // match ref {
-            // Some(e) => { return cell ;}
-            // None=> { panic!("eval error")}
-            // }
-        }
-        Cell::CONS { .. } => {
-            if sexp.car().is_symbol() && (Some("quote".to_string()) == sexp.car().name()) {
-                sexp.cadr()
-            } else if sexp.car().is_number() {
-                panic!("Arg Error")
-            } else if sexp.car().is_subr() {
-                unimplemented!()
-            } else if sexp.car().is_fsubr() {
-                unimplemented!()
-            } else if sexp.car().is_function() {
-                unimplemented!()
-            } else {
-                unreachable!()
-            }
-        }
-        _ => unimplemented!(),
-    }
-}
-
-fn evlis(sexp: Sexp) -> Sexp {
-    if sexp.is_nil() {
-        Cell::nil()
-    } else {
-        Cell::cons(sexp.car(), evlis(sexp.cdr()))
-    }
-}
-
-fn apply(func: Sexp, args: Sexp, env: Sexp) -> Sexp {
-    let sym = find_sym(func.name().unwrap(), env);
-    if sym.is_nil() {
-        panic!()
-    } else {
-        match sym.as_ref() {
-            Cell::SUBR { subr } => subr(args),
-            Cell::FSUBR => {
-                unimplemented!()
-            }
-            Cell::FUNC => {
-                unimplemented!()
-            }
-            _ => unreachable!(),
-        }
-    }
-}
-
-fn f_plus(args: Sexp) -> Sexp {
-    let mut res = 0.0;
-    let mut curr = args;
-    while curr.is_some() {
-        let car = curr.car();
-        let arg = match *car {
-            Cell::NUMBER { val } => val,
-            _ => panic!(),
-        };
-        curr = curr.cdr();
-        res += arg;
-    }
-    Cell::number(res)
-}
-
-fn find_sym(name: String, list: Sexp) -> Sexp {
-    let addr = assoc(Cell::symbol(name), list);
-    addr.cdr()
-}
-
-fn assoc(sym: Sexp, list: Sexp) -> Sexp {
-    match list.as_ref() {
-        Cell::NIL => list,
-        _ => {
-            if list.caar() == sym {
-                list.car()
-            } else {
-                assoc(sym, list.cdr())
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::token::{Token, Tokenize};
 
-    #[test]
-    fn test_parse_as_is() {
-        let lexer = Lexer::new("(+ (+ 1 2) 3)".chars().collect());
-        let tree = Parser::new(lexer).parse();
-        assert_eq!("(+ (+ 1 2) 3)", format!("{}", tree),);
-        tree.iter().for_each(|f| println!("{:?} ", f));
+    struct MockLexer {
+        tokens: Vec<Token>,
+        position: usize,
+    }
 
-        let lexer = Lexer::new("(+   (+ 1  2) 3)".chars().collect());
-        let tree = Parser::new(lexer).parse();
-        assert_eq!("(+ (+ 1 2) 3)", format!("{}", tree),);
-        tree.iter().for_each(|f| println!("{:?} ", f));
+    impl MockLexer {
+        pub fn new(tokens: Vec<Token>) -> Self {
+            Self {
+                tokens,
+                position: 0,
+            }
+        }
+    }
+
+    impl Tokenize for MockLexer {
+        fn token(&mut self) -> Option<Token> {
+            let token = self.tokens.get(self.position)?;
+            self.position += 1;
+            Some(token.clone())
+        }
     }
 
     #[test]
-    fn test_parse_with_quote() {
-        let lexer = Lexer::new("'1".chars().collect());
+    fn test_parse_tree() {
+        let tokens = vec![
+            Token::LPAREN,
+            Token::new("+".chars().collect()),
+            Token::new("1".chars().collect()),
+            Token::new("2".chars().collect()),
+            Token::RPAREN,
+        ];
+        let lexer = MockLexer::new(tokens);
         let tree = Parser::new(lexer).parse();
-        assert_eq!("(quote 1)", format!("{}", tree),);
+        assert_eq!("(+ 1 2)", format!("{}", tree));
     }
 
     #[test]
-    fn test_f_plus() {
-        let lexer = Lexer::new("(1 2 3)".chars().collect());
+    fn test_eval_plus() {
+        let tokens = vec![
+            Token::LPAREN,
+            Token::new("+".chars().collect()),
+            Token::new("1".chars().collect()),
+            Token::LPAREN,
+            Token::new("+".chars().collect()),
+            Token::new("2".chars().collect()),
+            Token::new("3".chars().collect()),
+            Token::RPAREN,
+            Token::RPAREN,
+        ];
+        let lexer = MockLexer::new(tokens);
         let tree = Parser::new(lexer).parse();
-        assert_eq!(Cell::number(6.0), f_plus(tree));
-    }
-
-    #[test]
-    fn test_find() {
-        let lexer = Lexer::new("((a . 1) (b . 2))".chars().collect());
-        let tree = Parser::new(lexer).parse();
-        assert_eq!(Cell::number(1.0), find_sym("a".to_string(), tree.clone()));
-        assert_eq!(Cell::number(2.0), find_sym("b".to_string(), tree));
-        let lexer = Lexer::new("(+ 1 2)".chars().collect());
-        let tree = Parser::new(lexer).parse();
-
-        let f_plus = Box::new(Cell::SUBR { subr: f_plus });
-        let env = Cell::cons(Cell::cons(Cell::symbol("+".into()), f_plus), Cell::nil());
-        assert_eq!(Cell::number(3.0), apply(tree.car(), evlis(tree.cdr()), env));
-    }
-
-    #[test]
-    fn test_apply() {
-        let lexer = Lexer::new("(+ 1 2)".chars().collect());
-        let tree = Parser::new(lexer).parse();
-
-        let f_plus = Box::new(Cell::SUBR { subr: f_plus });
-        let env = Cell::cons(Cell::cons(Cell::symbol("+".into()), f_plus), Cell::nil());
-        assert_eq!(Cell::number(3.0), apply(tree.car(), evlis(tree.cdr()), env));
+        assert_eq!("(+ 1 (+ 2 3))", format!("{}", tree));
     }
 }

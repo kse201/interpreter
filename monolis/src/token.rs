@@ -53,10 +53,10 @@ impl Token {
     /// '(',  ')', '\'', '.' のいずれかの場合、それに対応したTokenを返す
     pub fn find(c: &char) -> Option<Token> {
         match c {
-            &'(' => Some(Token::LPAREN),
-            &')' => Some(Token::RPAREN),
-            &'\'' => Some(Token::QUOTE),
-            &'.' => Some(Token::DOT),
+            '(' => Some(Token::LPAREN),
+            ')' => Some(Token::RPAREN),
+            '\'' => Some(Token::QUOTE),
+            '.' => Some(Token::DOT),
             _ => None,
         }
     }
@@ -69,16 +69,15 @@ fn is_symboltoken(s: Vec<char>) -> bool {
             if c.is_ascii_digit() {
                 false
             } else {
-                s.iter()
-                    .find(|c| !(c.is_ascii_alphabetic() || c.is_ascii_digit() || is_symch(c)))
-                    .is_none()
+                !s.iter()
+                    .any(|c| !(c.is_ascii_alphabetic() || c.is_ascii_digit() || is_symch(c)))
             }
         }
     }
 }
 
 fn is_symch(c: &char) -> bool {
-    Token::symbol_chars().find(|sym| *sym == c).is_some()
+    Token::symbol_chars().any(|sym| sym == c)
 }
 
 #[cfg(test)]
@@ -110,4 +109,8 @@ mod tests {
             assert_eq!(val, result, "case: {} failed", key);
         }
     }
+}
+
+pub trait Tokenize {
+    fn token(&mut self) -> Option<Token>;
 }

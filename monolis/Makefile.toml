@@ -1,7 +1,6 @@
 [tasks.ci]
 dependencies = [
     "fmt",
-    "check",
     "test",
     "clippy",
     "test-doc",
@@ -14,13 +13,6 @@ args = [
   "--all",
   "--",
   "--check",
-]
-
-[tasks.check]
-command = "cargo"
-args = [
-  "check",
-  "--all-targets",
 ]
 
 [tasks.doc]

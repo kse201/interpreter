@@ -4,23 +4,25 @@ pub mod token;
 
 pub type Lexer = lexer::Lexer;
 pub type Parser = parser::Parser<Lexer>;
+use log::*;
 
-use std::collections::HashMap;
-use std::{cell::RefCell, rc::Rc};
-pub type Env = Rc<RefCell<HashMap<String, Sexp>>>;
+use std::rc::Rc;
+pub type Env = parser::Env;
 
 use parser::{Cell, Sexp};
 
 pub fn eval(sexp: Sexp, genv: Env, lenv: Env) -> Sexp {
+    debug!("eval {:?}", sexp);
     match sexp.as_ref() {
         Cell::NUMBER { .. } => sexp.clone(),
         Cell::SYMBOL { name } => {
-            todo!()
-            // let cell = find_sym(name);
-            // match ref {
-            // Some(e) => { return cell ;}
-            // None=> { panic!("eval error")}
-            // }
+            let sym = find_sym(name.to_string(), genv);
+            if sym.is_some() {
+                sym
+            } else {
+                debug!("No symbol {:?}", sexp.as_ref());
+                panic!("No symbol {:?}", sexp.as_ref())
+            }
         }
         Cell::CONS { .. } => {
             if sexp.car().is_symbol() && (Some("quote".to_string()) == sexp.car().name()) {
@@ -46,6 +48,7 @@ pub fn eval(sexp: Sexp, genv: Env, lenv: Env) -> Sexp {
 }
 
 fn evlis(sexp: &Sexp, env: Env) -> Sexp {
+    debug!("evlis(sexp: {:?})", sexp);
     if sexp.is_nil() {
         Cell::nil()
     } else {
@@ -57,15 +60,14 @@ fn evlis(sexp: &Sexp, env: Env) -> Sexp {
 }
 
 fn apply(func: &Sexp, args: Sexp, env: Env) -> Sexp {
-    let sym = find_sym(func.name().unwrap(), env);
+    debug!("func: {:?}, args: {:?}", func, args);
+    let sym = find_sym(func.name().unwrap(), Rc::clone(&env));
     if sym.is_nil() {
         panic!()
     } else {
         match sym.as_ref() {
             Cell::SUBR { subr } => subr(args),
-            Cell::FSUBR => {
-                unimplemented!()
-            }
+            Cell::FSUBR { fsubr } => fsubr(args, env),
             Cell::FUNC => {
                 unimplemented!()
             }
@@ -93,6 +95,17 @@ fn f_plus(args: Sexp) -> Sexp {
         res += arg;
     }
     Cell::number(res)
+}
+
+fn f_setq(args: Sexp, env: Env) -> Sexp {
+    println!("f_setq: args: {:?}", args);
+    println!("env: {:?}", env);
+    let args1 = args.car();
+    let val = eval(args.cadr(), Rc::clone(&env), Default::default());
+    if let Cell::SYMBOL { name } = *args1 {
+        bind_sym(name, val, env);
+    }
+    Cell::nil()
 }
 
 fn find_sym(name: String, env: Env) -> Sexp {
@@ -125,6 +138,10 @@ fn assoc(sym: Sexp, list: Sexp) -> Sexp {
 
 pub fn initsubr(env: Env) {
     bind_sym("+".into(), Cell::subr(f_plus), env);
+}
+
+pub fn initfsubr(env: Env) {
+    bind_sym("setq".into(), Cell::fsubr(f_setq), env);
 }
 
 #[cfg(test)]

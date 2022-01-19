@@ -1,5 +1,7 @@
 use super::token::{Token, Tokenize};
+use std::collections::HashMap;
 use std::fmt;
+use std::{cell::RefCell, rc::Rc};
 
 #[derive(Debug, Clone, PartialEq)]
 /// セル
@@ -22,7 +24,7 @@ pub enum Cell {
     SUBR { subr: fn(Sexp) -> Sexp },
 
     /// 引数を評価しない組み込み関数
-    FSUBR,
+    FSUBR { fsubr: fn(Sexp, Env) -> Sexp },
 
     /// 関数
     FUNC,
@@ -30,6 +32,7 @@ pub enum Cell {
 
 /// S式
 pub type Sexp = Box<Cell>;
+pub type Env = Rc<RefCell<HashMap<String, Sexp>>>;
 
 impl fmt::Display for Cell {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -45,7 +48,6 @@ impl fmt::Display for Cell {
                 f.write_str("(")?;
                 self.fmt_list(f)
             }
-
             _ => unimplemented!(),
         }
     }
@@ -70,6 +72,10 @@ impl Cell {
 
     pub fn subr(func: fn(Sexp) -> Sexp) -> Sexp {
         Box::new(Self::SUBR { subr: func })
+    }
+
+    pub fn fsubr(func: fn(Sexp, Env) -> Sexp) -> Sexp {
+        Box::new(Self::FSUBR { fsubr: func })
     }
 
     fn fmt_list(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -252,6 +258,12 @@ pub struct Parser<T: Tokenize> {
     current: Option<Token>,
 }
 
+#[derive(Debug)]
+pub struct ParseError {
+    buf: Vec<char>,
+    position: usize,
+}
+
 impl<T: Tokenize> Parser<T> {
     pub fn new(mut lexer: T) -> Self {
         let current = lexer.token();
@@ -262,43 +274,46 @@ impl<T: Tokenize> Parser<T> {
         self.current = self.lexer.token();
     }
 
-    pub fn parse(&mut self) -> Sexp {
+    pub fn parse(&mut self) -> Result<Sexp, ParseError> {
         match self.current() {
-            Some(Token::NUMBER { val }) => Cell::number(*val),
-            Some(Token::SYMBOL { buf }) => Cell::symbol(buf.to_string()),
+            Some(Token::NUMBER { val }) => Ok(Cell::number(*val)),
+            Some(Token::SYMBOL { buf }) => Ok(Cell::symbol(buf.to_string())),
             Some(Token::QUOTE) => {
                 self.next();
-                Cell::cons(
+                Ok(Cell::cons(
                     Cell::symbol("quote".to_string()),
-                    Cell::cons(self.parse(), Cell::nil()),
-                )
+                    Cell::cons(self.parse()?, Cell::nil()),
+                ))
             }
             Some(Token::LPAREN) => self.parse_list(),
-            Some(Token::RPAREN) => panic!("parse error"),
-            None => Cell::nil(),
+            Some(Token::RPAREN) => Err(ParseError {
+                buf: ")".chars().collect(),
+                position: 1,
+            }),
+            None => Ok(Cell::nil()),
             _ => unimplemented!("parse error {:?}", self.current()),
         }
     }
 
-    fn parse_list(&mut self) -> Sexp {
+    fn parse_list(&mut self) -> Result<Sexp, ParseError> {
         self.next();
         // read list
         match self.current() {
-            Some(Token::RPAREN) => Cell::nil(),
+            Some(Token::RPAREN) => Ok(Cell::nil()),
             Some(Token::DOT) => {
                 self.next();
-                let cdr = self.parse();
+                let cdr = self.parse()?;
                 if cdr.is_atom() {
                     self.next();
                 }
-                cdr
+                Ok(cdr)
             }
             Some(_) => {
-                let car = self.parse();
-                let cdr = self.parse_list();
-                Cell::cons(car, cdr)
+                let car = self.parse()?;
+                let cdr = self.parse_list()?;
+                Ok(Cell::cons(car, cdr))
             }
-            None => Cell::nil(),
+            None => Ok(Cell::nil()),
         }
     }
 
@@ -344,7 +359,7 @@ mod tests {
             Token::RPAREN,
         ];
         let lexer = MockLexer::new(tokens);
-        let tree = Parser::new(lexer).parse();
+        let tree = Parser::new(lexer).parse().unwrap();
         assert_eq!("(+ 1 2)", format!("{}", tree));
     }
 
@@ -362,7 +377,7 @@ mod tests {
             Token::RPAREN,
         ];
         let lexer = MockLexer::new(tokens);
-        let tree = Parser::new(lexer).parse();
+        let tree = Parser::new(lexer).parse().unwrap();
         assert_eq!("(+ 1 (+ 2 3))", format!("{}", tree));
     }
 }

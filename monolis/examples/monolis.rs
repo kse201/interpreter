@@ -1,8 +1,9 @@
-use monolis::{eval, initsubr, Env, Lexer, Parser};
+use monolis::*;
 use std::io;
 use std::io::prelude::*;
 use std::rc::Rc;
 fn main() {
+    env_logger::init();
     loop {
         print!(">> ");
         io::stdout().flush().unwrap();
@@ -16,15 +17,18 @@ fn main() {
         if code == "exit\n" {
             break;
         }
+        let genv = Env::default();
+        let lenv = Default::default();
+        initsubr(Rc::clone(&genv));
+        initfsubr(Rc::clone(&genv));
 
         let lexer = Lexer::new(code.chars().collect());
         let mut parser = Parser::new(lexer);
 
         let expr = parser.parse();
-        let genv = Env::default();
-        let lenv = Default::default();
-        initsubr(Rc::clone(&genv));
-
-        println!("{}", eval(expr, genv, lenv));
+        match expr {
+            Ok(tree) => println!("{}", eval(tree, genv, lenv)),
+            Err(e) => println!("{:?}", e),
+        };
     }
 }

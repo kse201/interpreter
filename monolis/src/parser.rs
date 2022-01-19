@@ -1,4 +1,6 @@
 use super::token::{Token, Tokenize};
+use anyhow::anyhow;
+use anyhow::Result;
 use std::collections::HashMap;
 use std::fmt;
 use std::{cell::RefCell, rc::Rc};
@@ -21,10 +23,12 @@ pub enum Cell {
     CONS { car: Sexp, cdr: Sexp },
 
     /// 組み込み関数
-    SUBR { subr: fn(Sexp) -> Sexp },
+    SUBR { subr: fn(Sexp) -> Result<Sexp> },
 
     /// 引数を評価しない組み込み関数
-    FSUBR { fsubr: fn(Sexp, Env) -> Sexp },
+    FSUBR {
+        fsubr: fn(Sexp, Env) -> Result<Sexp>,
+    },
 
     /// 関数
     FUNC,
@@ -70,11 +74,11 @@ impl Cell {
         Box::new(Self::CONS { car, cdr })
     }
 
-    pub fn subr(func: fn(Sexp) -> Sexp) -> Sexp {
+    pub fn subr(func: fn(Sexp) -> Result<Sexp>) -> Sexp {
         Box::new(Self::SUBR { subr: func })
     }
 
-    pub fn fsubr(func: fn(Sexp, Env) -> Sexp) -> Sexp {
+    pub fn fsubr(func: fn(Sexp, Env) -> Result<Sexp>) -> Sexp {
         Box::new(Self::FSUBR { fsubr: func })
     }
 
@@ -84,7 +88,7 @@ impl Cell {
                 if car.is_nil() {
                     return write!(f, ")");
                 }
-                if cdr.is_some() && !cdr.is_list() {
+                if cdr.is_value() && !cdr.is_list() {
                     write!(f, "{} . {})", car.as_ref(), cdr.as_ref())
                 } else {
                     let r = write!(f, "{}", car.as_ref());
@@ -153,7 +157,7 @@ impl Cell {
         }
     }
 
-    pub fn is_some(&self) -> bool {
+    pub fn is_value(&self) -> bool {
         !self.is_nil()
     }
 
@@ -207,10 +211,10 @@ impl Cell {
         let v = match self {
             Cell::CONS { car, cdr } => {
                 let mut v = vec![];
-                if car.is_some() {
+                if car.is_value() {
                     v.push(car.as_ref());
                 }
-                if cdr.is_some() {
+                if cdr.is_value() {
                     v.push(cdr.as_ref());
                 }
                 v
@@ -226,10 +230,10 @@ impl Cell {
                     panic!()
                 }
                 let mut v = vec![];
-                if car.is_some() {
+                if car.is_value() {
                     v.push(car.as_mut());
                 }
-                if cdr.is_some() {
+                if cdr.is_value() {
                     v.push(cdr.as_mut());
                 }
                 v
@@ -258,12 +262,6 @@ pub struct Parser<T: Tokenize> {
     current: Option<Token>,
 }
 
-#[derive(Debug)]
-pub struct ParseError {
-    buf: Vec<char>,
-    position: usize,
-}
-
 impl<T: Tokenize> Parser<T> {
     pub fn new(mut lexer: T) -> Self {
         let current = lexer.token();
@@ -274,7 +272,7 @@ impl<T: Tokenize> Parser<T> {
         self.current = self.lexer.token();
     }
 
-    pub fn parse(&mut self) -> Result<Sexp, ParseError> {
+    pub fn parse(&mut self) -> Result<Sexp> {
         match self.current() {
             Some(Token::NUMBER { val }) => Ok(Cell::number(*val)),
             Some(Token::SYMBOL { buf }) => Ok(Cell::symbol(buf.to_string())),
@@ -286,16 +284,13 @@ impl<T: Tokenize> Parser<T> {
                 ))
             }
             Some(Token::LPAREN) => self.parse_list(),
-            Some(Token::RPAREN) => Err(ParseError {
-                buf: ")".chars().collect(),
-                position: 1,
-            }),
+            Some(Token::RPAREN) => Err(anyhow!("Un expected token ')'")),
             None => Ok(Cell::nil()),
-            _ => unimplemented!("parse error {:?}", self.current()),
+            _ => Err(anyhow!("parse error {:?}", self.current())),
         }
     }
 
-    fn parse_list(&mut self) -> Result<Sexp, ParseError> {
+    fn parse_list(&mut self) -> Result<Sexp> {
         self.next();
         // read list
         match self.current() {

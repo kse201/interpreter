@@ -1,9 +1,9 @@
 use super::lexer::Lexer;
 use super::token::Token;
 use std::fmt;
-use std::mem::uninitialized;
 
 #[derive(Debug, Clone, PartialEq)]
+/// セル
 pub enum Cell {
     /// nil
     NIL,
@@ -29,6 +29,7 @@ pub enum Cell {
     FUNC,
 }
 
+/// S式
 type Sexp = Box<Cell>;
 
 impl fmt::Display for Cell {
@@ -379,15 +380,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parser() {
-        let lexer = Lexer::new("(+ (+ 1   2) 3)".chars().collect());
+    fn test_parse_as_is() {
+        let lexer = Lexer::new("(+ (+ 1 2) 3)".chars().collect());
+        let tree = Parser::new(lexer).parse();
+        assert_eq!("(+ (+ 1 2) 3)", format!("{}", tree),);
+        tree.iter().for_each(|f| println!("{:?} ", f));
+
+        let lexer = Lexer::new("(+   (+ 1  2) 3)".chars().collect());
         let tree = Parser::new(lexer).parse();
         assert_eq!("(+ (+ 1 2) 3)", format!("{}", tree),);
         tree.iter().for_each(|f| println!("{:?} ", f));
     }
 
     #[test]
-    fn test_parser_quote() {
+    fn test_parse_with_quote() {
         let lexer = Lexer::new("'1".chars().collect());
         let tree = Parser::new(lexer).parse();
         assert_eq!("(quote 1)", format!("{}", tree),);
@@ -404,18 +410,13 @@ mod tests {
     fn test_find() {
         let lexer = Lexer::new("((a . 1) (b . 2))".chars().collect());
         let tree = Parser::new(lexer).parse();
-        println!("{:?}", tree);
         assert_eq!(Cell::number(1.0), find_sym("a".to_string(), tree.clone()));
-        assert_eq!(Cell::number(2.0), find_sym("b".to_string(), tree.clone()));
-
+        assert_eq!(Cell::number(2.0), find_sym("b".to_string(), tree));
         let lexer = Lexer::new("(+ 1 2)".chars().collect());
         let tree = Parser::new(lexer).parse();
 
         let f_plus = Box::new(Cell::SUBR { subr: f_plus });
-        let env = Cell::cons(
-            Cell::cons(Cell::symbol("+".into()), f_plus.clone()),
-            Cell::nil(),
-        );
+        let env = Cell::cons(Cell::cons(Cell::symbol("+".into()), f_plus), Cell::nil());
         assert_eq!(Cell::number(3.0), apply(tree.car(), evlis(tree.cdr()), env));
     }
 
@@ -425,10 +426,7 @@ mod tests {
         let tree = Parser::new(lexer).parse();
 
         let f_plus = Box::new(Cell::SUBR { subr: f_plus });
-        let env = Cell::cons(
-            Cell::cons(Cell::symbol("+".into()), f_plus.clone()),
-            Cell::nil(),
-        );
+        let env = Cell::cons(Cell::cons(Cell::symbol("+".into()), f_plus), Cell::nil());
         assert_eq!(Cell::number(3.0), apply(tree.car(), evlis(tree.cdr()), env));
     }
 }

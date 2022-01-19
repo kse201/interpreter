@@ -45,7 +45,7 @@ impl Token {
         CHARS.iter()
     }
 
-    pub fn separete_chars() -> Iter<'static, char> {
+    pub fn separate_chars() -> Iter<'static, char> {
         static CHARS: [char; 2] = ['(', ')'];
         CHARS.iter()
     }
@@ -87,55 +87,27 @@ mod tests {
 
     use super::*;
     #[test]
-    fn test_token_new_with_num() {
+    fn test_token_new() {
         let mut tables = HashMap::new();
-        tables.insert("1", Token::NUMBER { val: 1.0 });
-        tables.insert("10", Token::NUMBER { val: 10.0 });
-        tables.insert("2", Token::NUMBER { val: 2.0 });
 
-        tables.insert("-1", Token::NUMBER { val: -1.0 });
+        let number_patterns = vec![-1, 0, 1, 2, 10, 100];
+        number_patterns.iter().for_each(|p| {
+            tables.insert(p.to_string(), Token::NUMBER { val: *p as f64 });
+        });
+
+        let symbol_patterns = vec!["a", "!", "+", "aa", "!!", "++", "a!", "a+", "!a", "+a"];
+        symbol_patterns.iter().for_each(|p| {
+            tables.insert(p.to_string(), Token::SYMBOL { buf: p.to_string() });
+        });
+
+        let other_patterns = vec!["\"hello, workd\""];
+        other_patterns.iter().for_each(|p| {
+            tables.insert(p.to_string(), Token::OTHER { buf: p.to_string() });
+        });
+
         for (key, val) in tables {
             let result = Token::new(key.chars().collect());
-            assert_eq!(result, val, "case: {} failed", key);
-        }
-    }
-
-    #[test]
-    fn test_token_new_with_symbol() {
-        let mut tables = HashMap::new();
-        tables.insert("a", Token::SYMBOL { buf: "a".into() });
-
-        tables.insert("a-1", Token::SYMBOL { buf: "a-1".into() });
-
-        tables.insert("a!", Token::SYMBOL { buf: "a!".into() });
-
-        tables.insert("!a", Token::SYMBOL { buf: "!a".into() });
-        for (key, val) in tables {
-            let result = Token::new(key.chars().collect());
-            assert_eq!(result, val, "case: {} failed", key);
-        }
-    }
-
-    #[test]
-    fn test_is_symbol_token() {
-        let mut tables = HashMap::new();
-        tables.insert("a", true);
-        tables.insert("a-1", true);
-        tables.insert("a-b", true);
-        for (key, val) in tables {
-            let result = is_symboltoken(key.chars().collect());
-            assert_eq!(result, val, "case: {} failed", key);
-        }
-    }
-
-    #[test]
-    fn test_is_other_token() {
-        let mut tables = HashMap::new();
-        tables.insert("\"a\"", false);
-        tables.insert("\"Hello, World\"", false);
-        for (key, val) in tables {
-            let result = is_symboltoken(key.chars().collect());
-            assert_eq!(result, val, "case: {} failed", key);
+            assert_eq!(val, result, "case: {} failed", key);
         }
     }
 }

@@ -52,7 +52,7 @@ impl Lexer {
         let peek = self.peek();
         peek.is_some()
             && !peek.unwrap().is_whitespace()
-            && Token::separete_chars()
+            && Token::separate_chars()
                 .find(|c| *c == peek.unwrap())
                 .is_none()
     }
@@ -67,47 +67,59 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_lexer_with_number() {
-        let mut lexer = Lexer::new("(+ 1 1)".into());
-        assert_eq!(lexer.token(), Some(Token::LPAREN));
-        assert_eq!(
-            lexer.token(),
-            Some(Token::SYMBOL {
-                buf: "+".to_string(),
-            })
-        );
-
-        assert_eq!(lexer.token(), Some(Token::NUMBER { val: 1.0 }));
-
-        assert_eq!(lexer.token(), Some(Token::NUMBER { val: 1.0 }));
-
-        assert_eq!(lexer.token(), Some(Token::RPAREN));
-        assert_eq!(lexer.token(), None);
+    fn test_lexer_with_leaf() {
+        let mut lexer = Lexer::new("1".into());
+        assert_eq!(Some(Token::NUMBER { val: 1.0 }), lexer.token());
+        assert_eq!(None, lexer.token());
     }
 
     #[test]
-    fn test_lexer_with_other() {
-        let mut lexer = Lexer::new("(+ 'a 1)".into());
-        assert_eq!(lexer.token(), Some(Token::LPAREN));
-        assert_eq!(
-            lexer.token(),
-            Some(Token::SYMBOL {
-                buf: "+".to_string(),
-            })
-        );
+    fn test_lexer_with_quote() {
+        let mut lexer = Lexer::new("'1".into());
+        assert_eq!(Some(Token::QUOTE), lexer.token());
+        assert_eq!(Some(Token::NUMBER { val: 1.0 }), lexer.token());
+        assert_eq!(None, lexer.token());
 
-        assert_eq!(lexer.token(), Some(Token::QUOTE));
+        let mut lexer = Lexer::new("'a".into());
+        assert_eq!(Some(Token::QUOTE), lexer.token());
+        assert_eq!(Some(Token::SYMBOL { buf: "a".into() }), lexer.token());
+        assert_eq!(None, lexer.token());
+    }
 
-        assert_eq!(
-            lexer.token(),
-            Some(Token::SYMBOL {
-                buf: "a".to_string(),
-            })
-        );
+    #[test]
+    fn test_lexer_with_cons() {
+        let mut lexer = Lexer::new("(1 . 1)".into());
+        assert_eq!(Some(Token::LPAREN), lexer.token());
+        assert_eq!(Some(Token::NUMBER { val: 1.0 }), lexer.token());
+        assert_eq!(Some(Token::DOT), lexer.token());
+        assert_eq!(Some(Token::NUMBER { val: 1.0 }), lexer.token());
+        assert_eq!(Some(Token::RPAREN), lexer.token());
+        assert_eq!(None, lexer.token());
+    }
 
-        assert_eq!(lexer.token(), Some(Token::NUMBER { val: 1.0 }));
+    #[test]
+    fn test_lexer_with_a_branch() {
+        let mut lexer = Lexer::new("(+ 1 1)".into());
+        assert_eq!(Some(Token::LPAREN), lexer.token());
+        assert_eq!(Some(Token::SYMBOL { buf: "+".into() }), lexer.token());
+        assert_eq!(Some(Token::NUMBER { val: 1.0 }), lexer.token());
+        assert_eq!(Some(Token::NUMBER { val: 1.0 }), lexer.token());
+        assert_eq!(Some(Token::RPAREN), lexer.token());
+        assert_eq!(None, lexer.token());
+    }
 
-        assert_eq!(lexer.token(), Some(Token::RPAREN));
-        assert_eq!(lexer.token(), None);
+    #[test]
+    fn test_lexer_with_some_branch() {
+        let mut lexer = Lexer::new("(+ (+ 1 1) 1)".into());
+        assert_eq!(Some(Token::LPAREN), lexer.token());
+        assert_eq!(Some(Token::SYMBOL { buf: "+".into() }), lexer.token());
+        assert_eq!(Some(Token::LPAREN), lexer.token());
+        assert_eq!(Some(Token::SYMBOL { buf: "+".into() }), lexer.token());
+        assert_eq!(Some(Token::NUMBER { val: 1.0 }), lexer.token());
+        assert_eq!(Some(Token::NUMBER { val: 1.0 }), lexer.token());
+        assert_eq!(Some(Token::RPAREN), lexer.token());
+        assert_eq!(Some(Token::NUMBER { val: 1.0 }), lexer.token());
+        assert_eq!(Some(Token::RPAREN), lexer.token());
+        assert_eq!(None, lexer.token());
     }
 }

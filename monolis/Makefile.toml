@@ -3,9 +3,8 @@ dependencies = [
     "fmt",
     "check",
     "test",
+    "clippy",
     "test-doc",
-    "doc",
-    "build"
 ]
 
 [tasks.fmt]
@@ -54,3 +53,7 @@ args = [
 [tasks.test-doc]
 command = "cargo"
 args = ["test", "--doc"]
+
+[tasks.clippy]
+command = "cargo"
+args = ["clippy", "--all-targets", "--", "-D", "warnings"]

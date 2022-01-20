@@ -29,10 +29,6 @@ dependencies = ["doc"]
 command = "cargo"
 args = ["watch", "-x", "make view_doc"]
 
-[tasks.watch]
-command = "cargo"
-args = ["watch", "-x", "test"]
-
 [tasks.test]
 command = "cargo"
 args = [

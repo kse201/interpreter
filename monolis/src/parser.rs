@@ -23,15 +23,47 @@ pub enum Cell {
     CONS { car: Sexp, cdr: Sexp },
 
     /// 組み込み関数
-    SUBR { subr: fn(Sexp) -> Result<Sexp> },
+    SUBR {
+        name: String,
+        subr: fn(Sexp) -> Result<Sexp>,
+    },
 
     /// 引数を評価しない組み込み関数
     FSUBR {
+        name: String,
         fsubr: fn(Sexp, Env) -> Result<Sexp>,
     },
 
     /// 関数
     FUNC,
+}
+
+#[macro_export]
+macro_rules! nil {
+    () => {
+        Cell::nil()
+    };
+}
+
+#[macro_export]
+macro_rules! num {
+    ($num:expr) => {
+        Cell::number($num.into())
+    };
+}
+
+#[macro_export]
+macro_rules! sym {
+    ($name:expr) => {
+        Cell::symbol($name.to_string())
+    };
+}
+
+#[macro_export]
+macro_rules! cons {
+    ($car:expr, $cdr:expr) => {
+        Cell::cons($car, $cdr)
+    };
 }
 
 /// S式
@@ -52,7 +84,10 @@ impl fmt::Display for Cell {
                 f.write_str("(")?;
                 self.fmt_list(f)
             }
-            _ => unimplemented!(),
+            Self::SUBR { name, .. } => write!(f, "<subr: {}>", name),
+            Self::FSUBR { name, .. } => write!(f, "<fsubr: {}>", name),
+            Self::FUNC { .. } => write!(f, "<function>"),
+            Self::NIL { .. } => f.write_str("nil"),
         }
     }
 }
@@ -74,12 +109,12 @@ impl Cell {
         Box::new(Self::CONS { car, cdr })
     }
 
-    pub fn subr(func: fn(Sexp) -> Result<Sexp>) -> Sexp {
-        Box::new(Self::SUBR { subr: func })
+    pub fn subr(name: String, func: fn(Sexp) -> Result<Sexp>) -> Sexp {
+        Box::new(Self::SUBR { name, subr: func })
     }
 
-    pub fn fsubr(func: fn(Sexp, Env) -> Result<Sexp>) -> Sexp {
-        Box::new(Self::FSUBR { fsubr: func })
+    pub fn fsubr(name: String, func: fn(Sexp, Env) -> Result<Sexp>) -> Sexp {
+        Box::new(Self::FSUBR { name, fsubr: func })
     }
 
     fn fmt_list(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -106,14 +141,14 @@ impl Cell {
     pub fn car(&self) -> Sexp {
         match self {
             Cell::CONS { car, .. } => car.clone(),
-            _ => Cell::nil(),
+            _ => nil!(),
         }
     }
 
     pub fn cdr(&self) -> Sexp {
         match self {
             Cell::CONS { cdr, .. } => cdr.clone(),
-            _ => Cell::nil(),
+            _ => nil!(),
         }
     }
 
@@ -126,20 +161,14 @@ impl Cell {
     }
 
     pub fn set_car(&mut self, cell: Sexp) {
-        match self {
-            Cell::CONS { car, .. } => {
-                *car = cell;
-            }
-            _ => {}
+        if let Cell::CONS { car, .. } = self {
+            *car = cell;
         }
     }
 
     pub fn set_cdr(&mut self, cell: Sexp) {
-        match self {
-            Cell::CONS { cdr, .. } => {
-                *cdr = cell;
-            }
-            _ => {}
+        if let Cell::CONS { cdr, .. } = self {
+            *cdr = cell;
         }
     }
 
@@ -151,10 +180,7 @@ impl Cell {
     }
 
     pub fn is_nil(&self) -> bool {
-        match self {
-            Cell::NIL => true,
-            _ => false,
-        }
+        matches!(self, Cell::NIL)
     }
 
     pub fn is_value(&self) -> bool {
@@ -166,48 +192,30 @@ impl Cell {
     }
 
     pub fn is_symbol(&self) -> bool {
-        match self {
-            Cell::SYMBOL { .. } => true,
-            _ => false,
-        }
+        matches!(self, Cell::SYMBOL { .. })
     }
 
     pub fn is_number(&self) -> bool {
-        match self {
-            Cell::NUMBER { .. } => true,
-            _ => false,
-        }
+        matches!(self, Cell::NUMBER { .. })
     }
 
     pub fn is_list(&self) -> bool {
-        match self {
-            Cell::CONS { .. } => true,
-            _ => false,
-        }
+        matches!(self, Cell::CONS { .. })
     }
 
     pub fn is_subr(&self) -> bool {
-        match self {
-            Cell::SUBR { .. } => true,
-            _ => false,
-        }
+        matches!(self, Cell::SUBR { .. })
     }
 
     pub fn is_fsubr(&self) -> bool {
-        match self {
-            Cell::FSUBR { .. } => true,
-            _ => false,
-        }
+        matches!(self, Cell::FSUBR { .. })
     }
 
     pub fn is_function(&self) -> bool {
-        match self {
-            Cell::FUNC { .. } => true,
-            _ => false,
-        }
+        matches!(self, Cell::FUNC { .. })
     }
 
-    pub fn iter<'a>(&'a self) -> std::vec::IntoIter<&'a Cell> {
+    pub fn iter(&self) -> std::vec::IntoIter<&Cell> {
         let v = match self {
             Cell::CONS { car, cdr } => {
                 let mut v = vec![];
@@ -223,7 +231,7 @@ impl Cell {
         };
         v.into_iter()
     }
-    pub fn iter_mut<'a>(&'a mut self) -> std::vec::IntoIter<&'a mut Cell> {
+    pub fn iter_mut(&mut self) -> std::vec::IntoIter<&mut Cell> {
         let v = match self {
             Cell::CONS { car, cdr } => {
                 if car == cdr {
@@ -274,18 +282,15 @@ impl<T: Tokenize> Parser<T> {
 
     pub fn parse(&mut self) -> Result<Sexp> {
         match self.current() {
-            Some(Token::NUMBER { val }) => Ok(Cell::number(*val)),
-            Some(Token::SYMBOL { buf }) => Ok(Cell::symbol(buf.to_string())),
+            Some(Token::NUMBER { val }) => Ok(num!(*val)),
+            Some(Token::SYMBOL { buf }) => Ok(sym!(buf.to_string())),
             Some(Token::QUOTE) => {
                 self.next();
-                Ok(Cell::cons(
-                    Cell::symbol("quote".to_string()),
-                    Cell::cons(self.parse()?, Cell::nil()),
-                ))
+                Ok(cons!(sym!("quote"), cons!(self.parse()?, nil!())))
             }
             Some(Token::LPAREN) => self.parse_list(),
             Some(Token::RPAREN) => Err(anyhow!("Un expected token ')'")),
-            None => Ok(Cell::nil()),
+            None => Ok(nil!()),
             _ => Err(anyhow!("parse error {:?}", self.current())),
         }
     }
@@ -294,7 +299,7 @@ impl<T: Tokenize> Parser<T> {
         self.next();
         // read list
         match self.current() {
-            Some(Token::RPAREN) => Ok(Cell::nil()),
+            Some(Token::RPAREN) => Ok(nil!()),
             Some(Token::DOT) => {
                 self.next();
                 let cdr = self.parse()?;
@@ -306,9 +311,9 @@ impl<T: Tokenize> Parser<T> {
             Some(_) => {
                 let car = self.parse()?;
                 let cdr = self.parse_list()?;
-                Ok(Cell::cons(car, cdr))
+                Ok(cons!(car, cdr))
             }
-            None => Ok(Cell::nil()),
+            None => Ok(nil!()),
         }
     }
 

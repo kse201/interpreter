@@ -19,15 +19,32 @@ impl Lexer {
         self.input.get(self.position)
     }
 
+    fn prev(&mut self) -> Option<&char> {
+        self.input.get(self.position - 1)
+    }
+
     fn peek(&mut self) -> Option<&char> {
         self.input.get(self.position + 1)
     }
 
     fn is_peek_some_chars(&mut self) -> bool {
-        let peek = self.peek();
-        peek.is_some()
-            && !peek.unwrap().is_whitespace()
-            && !Token::separate_chars().any(|c| c == peek.unwrap())
+        if let Some(peek) = self.peek() {
+            !peek.is_whitespace() && !Token::separate_chars().any(|c| c == peek)
+        } else {
+            false
+        }
+    }
+
+    fn is_string_chars(&mut self) -> bool {
+        if let Some('"') = self.curr() {
+            if let Some('\\') = self.prev() {
+                true
+            } else {
+                false
+            }
+        } else {
+            true
+        }
     }
 
     fn next(&mut self) {
@@ -52,9 +69,23 @@ impl Tokenize for Lexer {
 
         // 連続する文字列を取得し、それに対応したTokenを返す
         let mut buf = vec![*curr];
-        while self.is_peek_some_chars() {
-            buf.push(*self.peek().unwrap());
-            self.next();
+        match self.curr() {
+            // 文字列
+            Some('"') => {
+                buf.push(*self.peek().unwrap());
+                self.next();
+                while self.is_string_chars() {
+                    buf.push(*self.peek().unwrap());
+                    self.next();
+                }
+            }
+            // それ以外
+            _ => {
+                while self.is_peek_some_chars() {
+                    buf.push(*self.peek().unwrap());
+                    self.next();
+                }
+            }
         }
 
         self.next();
@@ -66,35 +97,53 @@ impl Tokenize for Lexer {
 mod tests {
     use super::*;
 
+    fn assert_tokens(expect: Vec<Token>, input: &str) {
+        let mut lexer = Lexer::new(input.into());
+        expect.iter().for_each(|e| {
+            assert_eq!(Some(e.clone()), lexer.token());
+        });
+        assert_eq!(None, lexer.token());
+    }
+
     #[test]
     fn test_lexer_with_leaf() {
-        let mut lexer = Lexer::new("1".into());
-        assert_eq!(Some(Token::NUMBER { val: 1.0 }), lexer.token());
-        assert_eq!(None, lexer.token());
+        assert_tokens(vec![Token::NUMBER { val: 1.0 }], "1");
     }
 
     #[test]
     fn test_lexer_with_quote() {
-        let mut lexer = Lexer::new("'1".into());
-        assert_eq!(Some(Token::QUOTE), lexer.token());
-        assert_eq!(Some(Token::NUMBER { val: 1.0 }), lexer.token());
-        assert_eq!(None, lexer.token());
-
-        let mut lexer = Lexer::new("'a".into());
-        assert_eq!(Some(Token::QUOTE), lexer.token());
-        assert_eq!(Some(Token::SYMBOL { buf: "a".into() }), lexer.token());
-        assert_eq!(None, lexer.token());
+        assert_tokens(vec![Token::QUOTE, Token::NUMBER { val: 1.0 }], "'1");
+        assert_tokens(vec![Token::QUOTE, Token::SYMBOL { buf: "a".into() }], "'a");
     }
 
     #[test]
     fn test_lexer_with_cons() {
-        let mut lexer = Lexer::new("(1 . 1)".into());
-        assert_eq!(Some(Token::LPAREN), lexer.token());
-        assert_eq!(Some(Token::NUMBER { val: 1.0 }), lexer.token());
-        assert_eq!(Some(Token::DOT), lexer.token());
-        assert_eq!(Some(Token::NUMBER { val: 1.0 }), lexer.token());
-        assert_eq!(Some(Token::RPAREN), lexer.token());
-        assert_eq!(None, lexer.token());
+        assert_tokens(
+            vec![
+                Token::LPAREN,
+                Token::NUMBER { val: 1.0 },
+                Token::DOT,
+                Token::NUMBER { val: 1.0 },
+                Token::RPAREN,
+            ],
+            "(1 . 1)",
+        )
+    }
+
+    #[test]
+    fn test_lexer_with_string() {
+        assert_tokens(
+            vec![Token::STRING {
+                buf: "string".into(),
+            }],
+            r#""string""#,
+        );
+        assert_tokens(
+            vec![Token::STRING {
+                buf: r#"string with \" double-quote."#.into(),
+            }],
+            "\"string with \\\" double-quote.\"",
+        );
     }
 
     #[test]

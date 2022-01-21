@@ -15,6 +15,10 @@ pub enum Cell {
     /// 1.0 ...
     NUMBER { val: f64 },
 
+    /// String
+    /// quote
+    STRING { buf: String },
+
     /// Symbol
     /// quote
     SYMBOL { name: String },
@@ -60,6 +64,13 @@ macro_rules! sym {
 }
 
 #[macro_export]
+macro_rules! string {
+    ($buf:expr) => {
+        Cell::string($buf.to_string())
+    };
+}
+
+#[macro_export]
 macro_rules! cons {
     ($car:expr, $cdr:expr) => {
         Cell::cons($car, $cdr)
@@ -76,9 +87,11 @@ impl fmt::Display for Cell {
             Self::NUMBER { val } => {
                 write!(f, "{}", val)
             }
-
             Self::SYMBOL { name } => {
                 write!(f, "{}", name)
+            }
+            Self::STRING { buf } => {
+                write!(f, "{}", buf)
             }
             Self::CONS { .. } => {
                 f.write_str("(")?;
@@ -103,6 +116,10 @@ impl Cell {
 
     pub fn symbol(name: String) -> Sexp {
         Box::new(Self::SYMBOL { name })
+    }
+
+    pub fn string(buf: String) -> Sexp {
+        Box::new(Self::STRING { buf })
     }
 
     pub fn cons(car: Sexp, cdr: Sexp) -> Sexp {
@@ -175,6 +192,13 @@ impl Cell {
     pub fn name(&self) -> Option<String> {
         match self {
             Self::SYMBOL { name } => Some(name.to_string()),
+            _ => None,
+        }
+    }
+
+    pub fn val(&self) -> Option<f64> {
+        match self {
+            Self::NUMBER { val } => Some(*val),
             _ => None,
         }
     }
@@ -284,6 +308,7 @@ impl<T: Tokenize> Parser<T> {
         match self.current() {
             Some(Token::NUMBER { val }) => Ok(num!(*val)),
             Some(Token::SYMBOL { buf }) => Ok(sym!(buf.to_string())),
+            Some(Token::STRING { buf }) => Ok(string!(buf.to_string())),
             Some(Token::QUOTE) => {
                 self.next();
                 Ok(cons!(sym!("quote"), cons!(self.parse()?, nil!())))

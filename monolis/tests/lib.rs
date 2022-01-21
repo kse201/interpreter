@@ -45,6 +45,25 @@ fn test_eval_if() {
     assert_eval(num!(2), "(if (= 2 1) 1 2)");
 }
 
+#[test]
+fn test_eval_fizzbuzz() {
+    assert_eval(
+        num!(1),
+        r#"
+(defun fizzbuzz (x)
+  (if (and
+        (= 0 (mod x 3))
+        (= 0 (mod x 5)))
+    (print "fizzbuzz")
+    (if (= 0 (mod x 5))
+      (print "buzz")
+      (if (= 0 (mod x 3))
+        (print "fizz")
+        (print x)))))
+"#,
+    );
+}
+
 fn assert_eval(expect: Sexp, input: &str) {
     let input = String::from(input);
     let lexer = Lexer::new(input.chars().collect());

@@ -19,6 +19,10 @@ pub enum Token {
         buf: String,
     },
 
+    STRING {
+        buf: String,
+    },
+
     OTHER {
         buf: String,
     },
@@ -30,10 +34,22 @@ impl Token {
         match buf.parse::<f64>() {
             Ok(n) => Self::NUMBER { val: n },
             Err(_) => {
-                if is_symboltoken(s) {
+                if is_symboltoken(s.clone()) {
                     Self::SYMBOL { buf }
                 } else {
-                    Self::OTHER { buf }
+                    let first = s.first();
+                    let last = s.last();
+                    if first.is_some()
+                        && last.is_some()
+                        && first.unwrap() == &'"'
+                        && last.unwrap() == &'"'
+                    {
+                        Self::STRING {
+                            buf: buf.trim_matches('"').into(),
+                        }
+                    } else {
+                        Self::OTHER { buf }
+                    }
                 }
             }
         }
@@ -99,9 +115,14 @@ mod tests {
             tables.insert(p.to_string(), Token::SYMBOL { buf: p.to_string() });
         });
 
-        let other_patterns = vec!["\"hello, workd\""];
+        let other_patterns = vec!["\"\"hello, world\""];
         other_patterns.iter().for_each(|p| {
-            tables.insert(p.to_string(), Token::OTHER { buf: p.to_string() });
+            tables.insert(
+                p.to_string(),
+                Token::STRING {
+                    buf: "hello, world".into(),
+                },
+            );
         });
 
         for (key, val) in tables {

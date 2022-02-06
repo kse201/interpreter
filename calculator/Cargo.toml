@@ -1,6 +1,6 @@
 [package]
-name = "rs-ruby"
-descriptions = "Mini ruby in Rust"
+name = "calculator"
+descriptions = "Interpreter Practice in Rust."
 version = "0.1.0"
 edition = "2021"
 

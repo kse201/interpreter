@@ -22,27 +22,42 @@ const (
 	SLASH    = "/"
 	BANG     = "!"
 
-	EQ     = "=="
+	// ==
+	EQ = "=="
+	// !=
 	NOT_EQ = "!="
 
 	COMMA     = ","
 	SEMICOLON = ";"
 
+	// (
 	LPAREN = "("
+	// )
 	RPAREN = ")"
+	// {
 	LBRACE = "{"
+	// }
 	RBRACE = "}"
 
+	// >
 	LT = "<"
+	// >
 	GT = ">"
 
+	// fn
 	FUNCTION = "FUNCTION"
-	LET      = "LET"
+	// let
+	LET = "LET"
 
-	TRUE   = "true"
-	FALSE  = "false"
-	IF     = "if"
-	ELSE   = "else"
+	// true
+	TRUE = "true"
+	// false
+	FALSE = "false"
+	// if
+	IF = "if"
+	// else
+	ELSE = "else"
+	// return
 	RETURN = "return"
 )
 

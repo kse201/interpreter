@@ -6,7 +6,7 @@ use std::io::prelude::*;
 
 pub fn start() {
     loop {
-        print!(">> ");
+        print!("{}", PROMPT);
         io::stdout().flush().unwrap();
 
         let mut code = String::new();
@@ -19,13 +19,9 @@ pub fn start() {
             break;
         }
 
-        let lexer = Lexer::new(code.chars().collect());
-        let mut parser = Parser::new(lexer);
-
-        let expr = parser.parse();
-
-        if let Some(expr) = expr {
-            println!("{}", eval(&expr));
+        let mut lexer = Lexer::new(code.as_str());
+        for tok in lexer.iter() {
+            println!("{:?}", tok);
         }
     }
 }

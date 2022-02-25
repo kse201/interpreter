@@ -110,6 +110,16 @@ impl Lexer {
         }
         String::from_iter(ident)
     }
+
+    pub fn iter(&mut self) -> std::vec::IntoIter<Token> {
+        let mut tokens = Vec::new();
+        let mut tok = self.next_token();
+        while tok.token_type != TokenType::EOF {
+            tokens.push(tok);
+            tok = self.next_token();
+        }
+        tokens.into_iter()
+    }
 }
 
 fn is_letter(ch: char) -> bool {
